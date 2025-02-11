@@ -12,7 +12,10 @@ import {
   MenuItem,
   ToggleButtonGroup,
   ToggleButton,
+  Typography,
+  IconButton
 } from '@mui/material';
+import { ChevronLeft, ChevronRight, Close, Assessment, Upload, Delete } from '@mui/icons-material';
 
 type SDR = 'marine' | 'ludovic' | 'sylvain';
 
@@ -31,11 +34,11 @@ interface CallBlock {
 }
 
 interface DayBlocks {
-  [hour: number]: CallBlock[];
+  [hour: string]: CallBlock[];
 }
 
 interface SDRData {
-  [key in SDR]?: CallBlock[];
+  [key: string]: CallBlock[];
 }
 
 interface Stats {
@@ -45,10 +48,10 @@ interface Stats {
 }
 
 interface SDRStats {
-  [key in SDR]?: Stats;
+  [key: string]: Stats;
 }
 
-const WeeklyCallBlocks = () => {
+const WeeklyCallBlocks: React.FC = () => {
   const [data, setData] = useState<SDRData>({});
   const [stats, setStats] = useState<SDRStats>({});
   const [currentWeekStart, setCurrentWeekStart] = useState(new Date());
@@ -258,7 +261,7 @@ const WeeklyCallBlocks = () => {
             timeSlotEnd.setHours(hour + 1, 0, 0, 0);
 
             // Créer un objet pour stocker les blocs par SDR
-            const sdrBlocks: { [key in SDR]?: CallBlock } = {};
+            const sdrBlocks: { [key: string]: CallBlock } = {};
             
             // Regrouper les blocs par SDR
             Object.entries(data).forEach(([sdr, blocks]) => {
@@ -274,7 +277,7 @@ const WeeklyCallBlocks = () => {
               });
 
               if (matchingBlock) {
-                sdrBlocks[sdr as SDR] = matchingBlock;
+                sdrBlocks[sdr] = matchingBlock;
               }
             });
 
@@ -340,7 +343,7 @@ const WeeklyCallBlocks = () => {
       );
 
       if (sdrStats.totalCalls > 0) {
-        stats[sdr as SDR] = {
+        stats[sdr] = {
           totalCalls: sdrStats.totalCalls,
           totalDuration: sdrStats.totalDuration,
           averageDuration: sdrStats.totalDuration / sdrStats.totalCalls
@@ -372,15 +375,15 @@ const WeeklyCallBlocks = () => {
             <h3 className="stats-title">{sdr === 'marine' ? 'Marine' : sdr === 'ludovic' ? 'Ludovic' : 'Sylvain'}</h3>
             <div className="stats-grid">
               <div className="stat-item">
-                <div className="stat-value">{stats[sdr as SDR].totalCalls}</div>
+                <div className="stat-value">{stats[sdr].totalCalls}</div>
                 <div className="stat-label">Appels totaux</div>
               </div>
               <div className="stat-item">
-                <div className="stat-value">{Math.round(stats[sdr as SDR].totalDuration)}</div>
+                <div className="stat-value">{Math.round(stats[sdr].totalDuration)}</div>
                 <div className="stat-label">Minutes totales</div>
               </div>
               <div className="stat-item">
-                <div className="stat-value">{Math.round(stats[sdr as SDR].averageDuration)}</div>
+                <div className="stat-value">{Math.round(stats[sdr].averageDuration)}</div>
                 <div className="stat-label">Minutes/appel</div>
               </div>
             </div>
@@ -442,6 +445,7 @@ const WeeklyCallBlocks = () => {
                 textTransform: 'none',
                 borderRadius: 2,
                 px: 2,
+                py: 1,
               }}
             >
               Récapitulatif
