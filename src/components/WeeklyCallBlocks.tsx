@@ -1,74 +1,57 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Papa from 'papaparse';
-import { 
-  Paper, 
-  Typography, 
-  IconButton, 
-  Box, 
+import {
+  Box,
   Button,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
+  FormControl,
   Select,
   MenuItem,
-  FormControl,
-  InputLabel,
+  ToggleButtonGroup,
   ToggleButton,
-  ToggleButtonGroup
 } from '@mui/material';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Close, 
-  Assessment, 
-  Upload,
-  Delete,
-  Visibility
-} from '@mui/icons-material';
+
+type SDR = 'marine' | 'ludovic' | 'sylvain';
 
 interface Call {
   "Date d'activité": string;
-  "Associated Contact": string;
-  "Résultat de l'appel": string;
-  "Notes de l'appel": string;
+  "Durée": string;
+  [key: string]: string;
 }
 
 interface CallBlock {
-  start: Date;
-  end: Date;
+  start: string;
   duration: number;
   calls: number;
   details: Call[];
-  sdr: string;
-  date: string;
+  sdr: SDR;
 }
 
 interface DayBlocks {
-  [key: string]: CallBlock[];
+  [hour: number]: CallBlock[];
 }
-
-type SDR = 'marine' | 'ludovic' | 'sylvain';
 
 interface SDRData {
   [key in SDR]?: CallBlock[];
 }
 
-interface CallStats {
+interface Stats {
   totalCalls: number;
   totalDuration: number;
   averageDuration: number;
 }
 
 interface SDRStats {
-  marine?: CallStats;
-  ludovic?: CallStats;
-  sylvain?: CallStats;
+  [key in SDR]?: Stats;
 }
 
 const WeeklyCallBlocks = () => {
   const [data, setData] = useState<SDRData>({});
-  const [currentWeekStart, setCurrentWeekStart] = useState(getWeekStart(new Date()));
+  const [stats, setStats] = useState<SDRStats>({});
+  const [currentWeekStart, setCurrentWeekStart] = useState(new Date());
   const [selectedBlock, setSelectedBlock] = useState<CallBlock | null>(null);
   const [showWeekSummary, setShowWeekSummary] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -76,7 +59,6 @@ const WeeklyCallBlocks = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [currentView, setCurrentView] = useState<'all' | SDR>('all');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [stats, setStats] = useState<SDRStats>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function getWeekStart(date: Date) {
@@ -194,14 +176,11 @@ const WeeklyCallBlocks = () => {
         } else {
           // Créer un nouveau bloc avec les appels accumulés
           blocks.push({
-            start: new Date(currentBlock[0]["Date d'activité"]),
-            end: new Date(currentBlock[currentBlock.length - 1]["Date d'activité"]),
-            duration: (new Date(currentBlock[currentBlock.length - 1]["Date d'activité"]).getTime() - 
-                      new Date(currentBlock[0]["Date d'activité"]).getTime()) / (1000 * 60),
+            start: currentBlock[0]["Date d'activité"],
+            duration: currentBlock.reduce((acc, call) => acc + parseInt(call["Durée"]), 0),
             calls: currentBlock.length,
             details: [...currentBlock],
             sdr,
-            date: formatDate(new Date(currentBlock[0]["Date d'activité"]))
           });
           currentBlock = [call];
         }
@@ -211,14 +190,11 @@ const WeeklyCallBlocks = () => {
     // Ajouter le dernier bloc s'il existe
     if (currentBlock.length > 0) {
       blocks.push({
-        start: new Date(currentBlock[0]["Date d'activité"]),
-        end: new Date(currentBlock[currentBlock.length - 1]["Date d'activité"]),
-        duration: (new Date(currentBlock[currentBlock.length - 1]["Date d'activité"]).getTime() - 
-                  new Date(currentBlock[0]["Date d'activité"]).getTime()) / (1000 * 60),
+        start: currentBlock[0]["Date d'activité"],
+        duration: currentBlock.reduce((acc, call) => acc + parseInt(call["Durée"]), 0),
         calls: currentBlock.length,
         details: [...currentBlock],
         sdr,
-        date: formatDate(new Date(currentBlock[0]["Date d'activité"]))
       });
     }
 
@@ -314,7 +290,7 @@ const WeeklyCallBlocks = () => {
                 {Object.entries(sdrBlocks).map(([sdr, block]) => (
                   <div
                     key={`${sdr}-${block.start}`}
-                    className={`time-block ${sdr} ${getBlockColor(block.calls)}`}
+                    className={`time-block ${sdr}`}
                     style={calculateBlockStyle(block, sdr, blockCount)}
                     onClick={() => setSelectedBlock(block)}
                   >
@@ -345,7 +321,7 @@ const WeeklyCallBlocks = () => {
       if (currentView !== 'all' && currentView !== sdr) return;
 
       const sdrStats = blocks.reduce(
-        (acc: CallStats, block: CallBlock) => {
+        (acc: Stats, block: CallBlock) => {
           // Vérifier si le bloc est dans la semaine courante
           const blockDate = new Date(block.start);
           const isInCurrentWeek = weekDates.some(date => 
@@ -373,18 +349,6 @@ const WeeklyCallBlocks = () => {
     });
 
     return stats;
-  };
-
-  const calculateBlockStats = (blocks: CallBlock[]): SDRStats => {
-    return blocks.reduce((acc: SDRStats, block: CallBlock) => {
-      const sdr = block.sdr;
-      if (!acc[sdr]) {
-        acc[sdr] = { totalCalls: 0, totalDuration: 0 };
-      }
-      acc[sdr].totalCalls += block.calls;
-      acc[sdr].totalDuration += block.duration;
-      return acc;
-    }, {});
   };
 
   const renderStats = () => {
@@ -434,12 +398,6 @@ const WeeklyCallBlocks = () => {
     return 'red';
   };
 
-  const calculateBlockPosition = (time: Date) => {
-    const hours = time.getHours();
-    const minutes = time.getMinutes();
-    return hours + minutes / 60;
-  };
-
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -462,24 +420,23 @@ const WeeklyCallBlocks = () => {
   }, []);
 
   return (
-    <Paper elevation={0} sx={{ p: 3, bgcolor: 'transparent' }}>
+    <div>
       <Box sx={{ mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h5">Planning hebdomadaire des appels</Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: '#f3f4f6', p: 0.5, borderRadius: 2 }}>
-              <IconButton onClick={previousWeek} size="small">
+              <Button onClick={previousWeek} size="small">
                 <ChevronLeft />
-              </IconButton>
+              </Button>
               <Typography>Semaine du {formatDate(currentWeekStart)}</Typography>
-              <IconButton onClick={nextWeek} size="small">
+              <Button onClick={nextWeek} size="small">
                 <ChevronRight />
-              </IconButton>
+              </Button>
             </Box>
             <Button
               onClick={() => setShowWeekSummary(true)}
               variant="outlined"
-              startIcon={<Assessment />}
               size="small"
               sx={{
                 textTransform: 'none',
@@ -496,7 +453,6 @@ const WeeklyCallBlocks = () => {
               size="small"
             >
               <ToggleButton value="all" aria-label="all">
-                <Visibility sx={{ mr: 1 }} />
                 Tous
               </ToggleButton>
               <ToggleButton value="marine" aria-label="marine">
@@ -552,7 +508,7 @@ const WeeklyCallBlocks = () => {
           onClick={() => fileInputRef.current?.click()}
           disabled={isImporting}
           variant="contained"
-          startIcon={<Upload />}
+          size="small"
           sx={{
             textTransform: 'none',
             borderRadius: 2,
@@ -570,7 +526,7 @@ const WeeklyCallBlocks = () => {
           onClick={() => setShowDeleteDialog(true)}
           variant="outlined"
           color="error"
-          startIcon={<Delete />}
+          size="small"
           sx={{
             textTransform: 'none',
             borderRadius: 2,
@@ -617,17 +573,17 @@ const WeeklyCallBlocks = () => {
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <Typography variant="h6">
-                Détails du bloc - {formatDate(selectedBlock.start)}
+                Détails du bloc - {formatDate(new Date(selectedBlock.start))}
               </Typography>
-              <IconButton onClick={() => setSelectedBlock(null)} size="small">
+              <Button onClick={() => setSelectedBlock(null)} size="small">
                 <Close />
-              </IconButton>
+              </Button>
             </div>
             <div className="modal-body">
               <div className="details-grid">
                 <div className="details-item">
                   <Typography variant="subtitle2">Période :</Typography>
-                  <Typography>{formatTime(selectedBlock.start)} - {formatTime(selectedBlock.end)}</Typography>
+                  <Typography>{formatTime(new Date(selectedBlock.start))} - {formatTime(new Date(selectedBlock.start))}</Typography>
                 </div>
                 <div className="details-item">
                   <Typography variant="subtitle2">Durée totale :</Typography>
@@ -675,9 +631,9 @@ const WeeklyCallBlocks = () => {
               <Typography variant="h6">
                 Récapitulatif - Semaine du {formatDate(currentWeekStart)}
               </Typography>
-              <IconButton onClick={() => setShowWeekSummary(false)} size="small">
+              <Button onClick={() => setShowWeekSummary(false)} size="small">
                 <Close />
-              </IconButton>
+              </Button>
             </div>
             <div className="modal-body">
               {Object.keys(data).length > 0 && renderStats()}
@@ -685,7 +641,7 @@ const WeeklyCallBlocks = () => {
           </div>
         </div>
       )}
-    </Paper>
+    </div>
   );
 };
 
