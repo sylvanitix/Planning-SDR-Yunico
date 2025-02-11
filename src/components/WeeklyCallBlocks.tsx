@@ -41,16 +41,29 @@ interface CallBlock {
   calls: number;
   details: Call[];
   sdr: string;
+  date: string;
 }
 
 interface DayBlocks {
   [key: string]: CallBlock[];
 }
 
-type SDR = 'marine' | 'ludovic';
+type SDR = 'marine' | 'ludovic' | 'sylvain';
 
 interface SDRData {
   [key in SDR]?: CallBlock[];
+}
+
+interface CallStats {
+  totalCalls: number;
+  totalDuration: number;
+  averageDuration: number;
+}
+
+interface SDRStats {
+  marine?: CallStats;
+  ludovic?: CallStats;
+  sylvain?: CallStats;
 }
 
 const WeeklyCallBlocks = () => {
@@ -63,6 +76,7 @@ const WeeklyCallBlocks = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [currentView, setCurrentView] = useState<'all' | SDR>('all');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [stats, setStats] = useState<SDRStats>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function getWeekStart(date: Date) {
@@ -186,7 +200,8 @@ const WeeklyCallBlocks = () => {
                       new Date(currentBlock[0]["Date d'activité"]).getTime()) / (1000 * 60),
             calls: currentBlock.length,
             details: [...currentBlock],
-            sdr
+            sdr,
+            date: formatDate(new Date(currentBlock[0]["Date d'activité"]))
           });
           currentBlock = [call];
         }
@@ -202,7 +217,8 @@ const WeeklyCallBlocks = () => {
                   new Date(currentBlock[0]["Date d'activité"]).getTime()) / (1000 * 60),
         calls: currentBlock.length,
         details: [...currentBlock],
-        sdr
+        sdr,
+        date: formatDate(new Date(currentBlock[0]["Date d'activité"]))
       });
     }
 
@@ -239,11 +255,17 @@ const WeeklyCallBlocks = () => {
             left: '4px',
             width: 'calc(50% - 6px)',
           }
-        : {
-            ...baseStyle,
-            right: '4px',
-            width: 'calc(50% - 6px)',
-          };
+        : sdr === 'ludovic'
+          ? {
+              ...baseStyle,
+              left: 'calc(50% + 6px)',
+              width: 'calc(50% - 6px)',
+            }
+          : {
+              ...baseStyle,
+              right: '4px',
+              width: 'calc(50% - 6px)',
+            };
     };
 
     return days.map((day, dayIndex) => {
@@ -296,7 +318,7 @@ const WeeklyCallBlocks = () => {
                     style={calculateBlockStyle(block, sdr, blockCount)}
                     onClick={() => setSelectedBlock(block)}
                   >
-                    <div className="time-block-name">{sdr === 'marine' ? 'Marine' : 'Ludovic'}</div>
+                    <div className="time-block-name">{sdr === 'marine' ? 'Marine' : sdr === 'ludovic' ? 'Ludovic' : 'Sylvain'}</div>
                     <div>{block.calls} appels • {Math.round(block.duration)}min</div>
                   </div>
                 ))}
@@ -309,7 +331,7 @@ const WeeklyCallBlocks = () => {
   };
 
   const calculateStats = () => {
-    const stats: { [key: string]: { totalCalls: number; totalDuration: number; averageCallDuration: number } } = {};
+    const stats: SDRStats = {};
 
     // Obtenir les dates de la semaine
     const weekDates = Array.from({ length: 5 }, (_, i) => {
@@ -323,7 +345,7 @@ const WeeklyCallBlocks = () => {
       if (currentView !== 'all' && currentView !== sdr) return;
 
       const sdrStats = blocks.reduce(
-        (acc, block) => {
+        (acc: CallStats, block: CallBlock) => {
           // Vérifier si le bloc est dans la semaine courante
           const blockDate = new Date(block.start);
           const isInCurrentWeek = weekDates.some(date => 
@@ -342,15 +364,27 @@ const WeeklyCallBlocks = () => {
       );
 
       if (sdrStats.totalCalls > 0) {
-        stats[sdr] = {
+        stats[sdr as SDR] = {
           totalCalls: sdrStats.totalCalls,
           totalDuration: sdrStats.totalDuration,
-          averageCallDuration: sdrStats.totalDuration / sdrStats.totalCalls
+          averageDuration: sdrStats.totalDuration / sdrStats.totalCalls
         };
       }
     });
 
     return stats;
+  };
+
+  const calculateBlockStats = (blocks: CallBlock[]): SDRStats => {
+    return blocks.reduce((acc: SDRStats, block: CallBlock) => {
+      const sdr = block.sdr;
+      if (!acc[sdr]) {
+        acc[sdr] = { totalCalls: 0, totalDuration: 0 };
+      }
+      acc[sdr].totalCalls += block.calls;
+      acc[sdr].totalDuration += block.duration;
+      return acc;
+    }, {});
   };
 
   const renderStats = () => {
@@ -371,18 +405,18 @@ const WeeklyCallBlocks = () => {
         </div>
         {activeSDRs.map(sdr => (
           <div key={sdr} className="stats-section">
-            <h3 className="stats-title">{sdr === 'marine' ? 'Marine' : 'Ludovic'}</h3>
+            <h3 className="stats-title">{sdr === 'marine' ? 'Marine' : sdr === 'ludovic' ? 'Ludovic' : 'Sylvain'}</h3>
             <div className="stats-grid">
               <div className="stat-item">
-                <div className="stat-value">{stats[sdr].totalCalls}</div>
+                <div className="stat-value">{stats[sdr as SDR].totalCalls}</div>
                 <div className="stat-label">Appels totaux</div>
               </div>
               <div className="stat-item">
-                <div className="stat-value">{Math.round(stats[sdr].totalDuration)}</div>
+                <div className="stat-value">{Math.round(stats[sdr as SDR].totalDuration)}</div>
                 <div className="stat-label">Minutes totales</div>
               </div>
               <div className="stat-item">
-                <div className="stat-value">{Math.round(stats[sdr].averageCallDuration)}</div>
+                <div className="stat-value">{Math.round(stats[sdr as SDR].averageDuration)}</div>
                 <div className="stat-label">Minutes/appel</div>
               </div>
             </div>
@@ -471,6 +505,9 @@ const WeeklyCallBlocks = () => {
               <ToggleButton value="ludovic" aria-label="ludovic">
                 Ludovic
               </ToggleButton>
+              <ToggleButton value="sylvain" aria-label="sylvain">
+                Sylvain
+              </ToggleButton>
             </ToggleButtonGroup>
           </Box>
         </Box>
@@ -553,6 +590,7 @@ const WeeklyCallBlocks = () => {
             <Select label="Commercial">
               <MenuItem onClick={() => handleSDRSelect('marine')}>Marine</MenuItem>
               <MenuItem onClick={() => handleSDRSelect('ludovic')}>Ludovic</MenuItem>
+              <MenuItem onClick={() => handleSDRSelect('sylvain')}>Sylvain</MenuItem>
             </Select>
           </FormControl>
         </DialogContent>
